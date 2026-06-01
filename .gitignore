@@ -1,0 +1,28 @@
+# 环境变量（含真实 API Key）
+.env
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+
+# 数据目录（体积大，本地生成）
+data/
+*.db
+*.sqlite3
+
+# IDE
+.vscode/
+.idea/
+
+# Claude
+.claude/
+
+# 测试
+.pytest_cache/
+
+# 系统
+.DS_Store
+Thumbs.db

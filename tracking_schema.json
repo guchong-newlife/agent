@@ -1,0 +1,255 @@
+{
+  "description": "企业智能搜索系统 — 埋点事件数据结构 v2",
+
+  "common_fields": {
+    "event_id": "UUID v4，事件唯一标识",
+    "trackName": "事件行为标识: page_view | click | scroll | visibility | error | input | custom",
+    "timestamp": "ISO 8601 UTC 毫秒，如 2026-06-01T20:31:12.456Z",
+    "fingerprint_id": "浏览器指纹哈希，localStorage 持久化",
+    "session_id": "会话 ID，sessionStorage 存储，标签页关闭后失效",
+    "page_url": "当前页面完整 URL",
+    "page_title": "document.title",
+    "referrer": "document.referrer",
+    "browser": {
+      "user_agent": "navigator.userAgent",
+      "platform": "navigator.platform",
+      "language": "navigator.language",
+      "languages": ["navigator.languages 数组"],
+      "cookie_enabled": "navigator.cookieEnabled",
+      "do_not_track": "navigator.doNotTrack",
+      "timezone": "Intl.DateTimeFormat().resolvedOptions().timeZone",
+      "timezone_offset": "new Date().getTimezoneOffset()",
+      "vendor": "navigator.vendor",
+      "hardware_concurrency": "navigator.hardwareConcurrency",
+      "device_memory": "navigator.deviceMemory"
+    },
+    "screen": {
+      "width": "screen.width",
+      "height": "screen.height",
+      "avail_width": "screen.availWidth",
+      "avail_height": "screen.availHeight",
+      "color_depth": "screen.colorDepth",
+      "pixel_ratio": "window.devicePixelRatio",
+      "viewport_width": "window.innerWidth",
+      "viewport_height": "window.innerHeight"
+    }
+  },
+
+  "fingerprint": {
+    "description": "浏览器指纹：收集多维度特征 → JSON.stringify → SHA-256 哈希",
+    "generation": "页面加载时异步计算一次，结果存入 localStorage，后续直接读取",
+    "features": {
+      "user_agent": "navigator.userAgent",
+      "platform": "navigator.platform",
+      "language": "navigator.language",
+      "hardware_concurrency": "navigator.hardwareConcurrency",
+      "device_memory": "navigator.deviceMemory",
+      "screen": "screen.width + 'x' + screen.height + 'x' + screen.colorDepth",
+      "timezone_offset": "new Date().getTimezoneOffset()",
+      "touch_support": "'ontouchstart' in window",
+      "canvas_fp": "Canvas 指纹 — 渲染隐藏文字 → toDataURL → 取前 32 字符哈希",
+      "webgl_fp": "WebGL 指纹 — WEBGL_debug_renderer_info.getParameter(UNMASKED_VENDOR_WEBGL) + UNMASKED_RENDERER_WEBGL",
+      "plugins_hash": "遍历 navigator.plugins 拼接 name → 哈希",
+      "fonts_hash": "document.fonts 或 FontFaceSet 检测可用字体列表",
+      "audio_fp": "AudioContext 指纹 — OscillatorNode + DynamicsCompressorNode → getChannelData 采样截断哈希",
+      "webgpu_adapter": "navigator.gpu?.requestAdapter() 返回的 adapter info（Chrome 126+）"
+    },
+    "storage": "localStorage.setItem('__fp_id', hash) — 跨会话复用",
+    "fallback": "若 localStorage 不可用，每次生成新 ID 并用 sessionStorage 缓存"
+  },
+
+  "events": {
+
+    "page_view": {
+      "description": "页面加载 / SPA 路由切换时触发",
+      "trackName": "page_view",
+      "trigger": "DOMContentLoaded 后、浏览器 history.pushState/replaceState 拦截",
+      "special_fields": {
+        "load_time_ms": "performance.timing.loadEventEnd - performance.timing.navigationStart",
+        "dom_ready_ms": "performance.timing.domContentLoadedEventEnd - performance.timing.navigationStart",
+        "first_paint_ms": "performance.getEntriesByType('paint').find(p.name==='first-contentful-paint')?.startTime",
+        "dns_ms": "performance.timing.domainLookupEnd - performance.timing.domainLookupStart",
+        "tcp_ms": "performance.timing.connectEnd - performance.timing.connectStart",
+        "ttfb_ms": "performance.timing.responseStart - performance.timing.requestStart",
+        "fetch_start_ms": "performance.timing.fetchStart - performance.timing.navigationStart",
+        "redirect_count": "performance.navigation.redirectCount",
+        "navigation_type": "performance.navigation.type → navigate | reload | back_forward"
+      }
+    },
+
+    "click": {
+      "description": "页面任意元素被点击时触发（事件委托在 document 层）",
+      "trackName": "click",
+      "trigger": "document.addEventListener('click', ...) 捕获阶段",
+      "special_fields": {
+        "element": {
+          "tag": "element.tagName",
+          "id": "element.id",
+          "class_list": "element.className 字符串",
+          "text": "element.textContent 截断至 200 字符",
+          "selector": "从当前元素向上生成唯一 CSS 选择器路径（最多 5 层）",
+          "attributes": "收集所有 data-* 属性为键值对",
+          "href": "若为 A 标签取其 href"
+        },
+        "mouse": {
+          "client_x": "event.clientX",
+          "client_y": "event.clientY",
+          "page_x": "event.pageX",
+          "page_y": "event.pageY",
+          "button": "event.button 0=左键 1=中键 2=右键"
+        },
+        "modifiers": {
+          "ctrl_key": "event.ctrlKey",
+          "shift_key": "event.shiftKey",
+          "alt_key": "event.altKey",
+          "meta_key": "event.metaKey"
+        }
+      }
+    },
+
+    "scroll": {
+      "description": "页面滚动时触发，已做性能优化",
+      "trackName": "scroll",
+      "performance_notes": [
+        "使用 requestAnimationFrame 节流，每秒最多触发 4 次（~250ms 间隔）",
+        "滚动停止 500ms 后才上报，避免连续滚动时大量事件",
+        "仅记录滚动深度达到 25%、50%、75%、100% 里程碑时的事件，减少冗余",
+        "被动事件监听 { passive: true }，不阻塞主线程"
+      ],
+      "trigger": "window.addEventListener('scroll', ...) with rAF throttle + debounce",
+      "special_fields": {
+        "scroll_depth_pct": "当前滚动百分比 0-100，四舍五入到整数",
+        "scroll_depth_px": "window.scrollY",
+        "max_scroll_pct": "本次会话中记录到的最大滚动深度百分比",
+        "document_height": "document.documentElement.scrollHeight",
+        "viewport_height": "window.innerHeight",
+        "milestone": "首次达到的里程碑: 25 | 50 | 75 | 100，null 表示非里程碑事件"
+      }
+    },
+
+    "visibility": {
+      "description": "页面可见性变化（切换标签页、最小化窗口）",
+      "trackName": "visibility",
+      "trigger": "document.addEventListener('visibilitychange', ...)",
+      "special_fields": {
+        "state": "document.visibilityState → visible | hidden",
+        "duration_visible_ms": "从上次 visible 到本次 hidden 的持续时间，首次进入不计"
+      }
+    },
+
+    "error": {
+      "description": "未捕获的 JavaScript 异常与 Promise 拒绝",
+      "trackName": "error",
+      "trigger": "window.onerror + window.addEventListener('unhandledrejection', ...)",
+      "special_fields": {
+        "error_type": "error | unhandledrejection",
+        "message": "error.message",
+        "filename": "error.filename",
+        "lineno": "error.lineno",
+        "colno": "error.colno",
+        "stack": "error.error?.stack 截断至 2000 字符"
+      }
+    },
+
+    "input": {
+      "description": "表单输入完成（失焦或回车）时触发，不记录敏感内容",
+      "trackName": "input",
+      "trigger": "表单元素 blur 或 keydown.Enter，仅记录有 name 属性的字段",
+      "special_fields": {
+        "element": {
+          "tag": "element.tagName",
+          "name": "element.name",
+          "type": "element.type",
+          "id": "element.id",
+          "autocomplete": "element.autocomplete"
+        },
+        "value_length": "element.value.length（仅长度，不记录内容）",
+        "interaction_time_ms": "从 focus 到 blur 的停留时间"
+      }
+    },
+
+    "custom": {
+      "description": "自定义埋点，供业务代码手动调用",
+      "trackName": "custom",
+      "trigger": "window.__tracker.track('custom', { ... })",
+      "special_fields": {
+        "label": "自定义标签",
+        "payload": "任意 JSON 数据"
+      }
+    }
+  },
+
+  "sample_payloads": {
+    "page_view": {
+      "event_id": "evt_a1b2c3d4e5f6",
+      "trackName": "page_view",
+      "timestamp": "2026-06-01T20:30:45.123Z",
+      "fingerprint_id": "fp_e4f5a6b7c8d9",
+      "session_id": "sess_1m2n3o4p5q6r",
+      "page_url": "http://localhost:8000/admin",
+      "page_title": "数据库管理 - 企业智能搜索系统",
+      "referrer": "http://localhost:8000/",
+      "browser": { "user_agent": "Mozilla/5.0 ...", "platform": "Win32", "language": "zh-CN", "timezone": "Asia/Shanghai", "timezone_offset": -480 },
+      "screen": { "width": 1920, "height": 1080, "viewport_width": 1680, "viewport_height": 920, "pixel_ratio": 1.25 },
+      "load_time_ms": 342,
+      "dom_ready_ms": 156,
+      "first_paint_ms": 210,
+      "dns_ms": 2,
+      "tcp_ms": 5,
+      "ttfb_ms": 45,
+      "navigation_type": "navigate"
+    },
+    "click": {
+      "event_id": "evt_b2c3d4e5f6g7",
+      "trackName": "click",
+      "timestamp": "2026-06-01T20:31:12.456Z",
+      "fingerprint_id": "fp_e4f5a6b7c8d9",
+      "session_id": "sess_1m2n3o4p5q6r",
+      "page_url": "http://localhost:8000/admin",
+      "page_title": "数据库管理 - 企业智能搜索系统",
+      "referrer": "http://localhost:8000/admin",
+      "browser": { "user_agent": "Mozilla/5.0 ...", "platform": "Win32", "language": "zh-CN", "timezone": "Asia/Shanghai", "timezone_offset": -480 },
+      "screen": { "width": 1920, "height": 1080, "viewport_width": 1680, "viewport_height": 920, "pixel_ratio": 1.25 },
+      "element": {
+        "tag": "BUTTON",
+        "id": "",
+        "class_list": "btn-warn",
+        "text": "停用",
+        "selector": "table#data-table > tbody > tr:nth-child(1) > td.actions > button.btn-warn",
+        "attributes": { "data-action": "disable", "data-idx": "0" }
+      },
+      "mouse": { "client_x": 1250, "client_y": 340, "page_x": 1250, "page_y": 780, "button": 0 },
+      "modifiers": { "ctrl_key": false, "shift_key": false, "alt_key": false, "meta_key": false }
+    },
+    "scroll": {
+      "event_id": "evt_c3d4e5f6g7h8",
+      "trackName": "scroll",
+      "timestamp": "2026-06-01T20:32:00.789Z",
+      "fingerprint_id": "fp_e4f5a6b7c8d9",
+      "session_id": "sess_1m2n3o4p5q6r",
+      "page_url": "http://localhost:8000/admin",
+      "page_title": "数据库管理 - 企业智能搜索系统",
+      "browser": {},
+      "screen": { "viewport_height": 920 },
+      "scroll_depth_pct": 75,
+      "scroll_depth_px": 840,
+      "max_scroll_pct": 75,
+      "document_height": 1120,
+      "viewport_height": 920,
+      "milestone": 75
+    },
+    "visibility": {
+      "event_id": "evt_d4e5f6g7h8i9",
+      "trackName": "visibility",
+      "timestamp": "2026-06-01T20:35:00.000Z",
+      "fingerprint_id": "fp_e4f5a6b7c8d9",
+      "session_id": "sess_1m2n3o4p5q6r",
+      "page_url": "http://localhost:8000/admin",
+      "page_title": "数据库管理 - 企业智能搜索系统",
+      "browser": {},
+      "screen": {},
+      "state": "hidden",
+      "duration_visible_ms": 253780
+    }
+  }
+}

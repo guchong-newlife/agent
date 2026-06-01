@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>企业智能搜索系统</title>
+    <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+    <div class="app-container">
+        <header class="app-header">
+            <h1>企业智能搜索系统</h1>
+            <span class="subtitle">Powered by DeepSeek ReAct Agent</span>
+            <button id="toggleTrace" class="toggle-btn" title="显示/隐藏搜索追踪">追踪面板</button>
+        </header>
+
+        <div class="main-content">
+            <div class="chat-panel" id="chatPanel">
+                <div class="messages" id="messages">
+                    <div class="welcome-message">
+                        <h2>欢迎使用企业智能搜索系统</h2>
+                        <p>我可以帮你搜索以下信息：</p>
+                        <ul>
+                            <li>员工信息、组织架构（HR系统）</li>
+                            <li>客户、订单、产品（CRM系统）</li>
+                            <li>项目进度、任务分配（项目管理系统）</li>
+                            <li>公司政策、技术文档（文档管理系统）</li>
+                            <li>系统日志、代码仓库</li>
+                        </ul>
+                        <p class="hint">试试问："张伟是哪个部门的？" 或 "公司有哪些关于数据安全的政策？"</p>
+                    </div>
+                </div>
+                <div class="input-area">
+                    <textarea id="userInput" placeholder="输入你的问题..." rows="2"></textarea>
+                    <button id="sendBtn" title="发送">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/>
+                        </svg>
+                    </button>
+                </div>
+                <div class="status-bar" id="statusBar">就绪</div>
+            </div>
+
+            <aside class="trace-panel" id="tracePanel">
+                <div class="trace-header">
+                    <h3>搜索追踪</h3>
+                </div>
+                <div class="trace-content" id="traceContent">
+                    <div class="trace-empty">等待搜索开始...</div>
+                </div>
+            </aside>
+        </div>
+    </div>
+
+    <script src="/static/tracker.js"></script>
+    <script src="/static/app.js"></script>
+</body>
+</html>

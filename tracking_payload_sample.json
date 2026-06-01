@@ -1,0 +1,243 @@
+{
+  "scenario": "用户在首页输入问题'张鹏是哪个部门的？'后，点击发送按钮。埋点系统从页面加载到点击发送的完整事件序列。",
+
+  "step_1_fingerprint": {
+    "description": "页面加载时异步生成浏览器指纹，结果存入 localStorage",
+    "computation": {
+      "input_features": {
+        "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
+        "platform": "Win32",
+        "language": "zh-CN",
+        "hardware_concurrency": 16,
+        "device_memory": 8,
+        "screen": "1920x1080x24",
+        "timezone_offset": -480,
+        "touch_support": false,
+        "canvas_hash": "e3b0c44298fc1c149afbf4c8996fb924",
+        "webgl_vendor": "Google Inc. (NVIDIA)",
+        "webgl_renderer": "ANGLE (NVIDIA, NVIDIA GeForce RTX 4060 (0x00002882) Direct3D11 vs_5_0 ps_5_0)",
+        "plugins_list": "Chrome PDF Plugin,Chrome PDF Viewer,Native Client",
+        "fonts_sample": "Arial,Calibri,Cambria,Consolas,Courier New,Georgia,Helvetica,Impact,Microsoft YaHei,SimSun,Tahoma,Times New Roman,Trebuchet MS,Verdana,Webdings,Wingdings",
+        "audio_sample_hash": "d41d8cd98f00b204e9800998ecf8427e",
+        "webgpu_adapter": null
+      },
+      "fingerprint_id": "fp_a3f7c2d9e1b506482a91c78f3d45e0678b2c1d9a0f4e5b6789abc123def45678",
+      "storage": "localStorage.setItem('__fp_id', 'fp_a3f7c2d9...')"
+    }
+  },
+
+  "step_2_page_view": {
+    "description": "页面加载完成，自动发送 page_view 事件",
+
+    "event_id": "evt_001_a3f7c001",
+    "trackName": "page_view",
+    "timestamp": "2026-06-01T20:30:45.123Z",
+    "fingerprint_id": "fp_a3f7c2d9e1b506482a91c78f3d45e0678b2c1d9a0f4e5b6789abc123def45678",
+    "session_id": "sess_x8k2m7p1q4w9r",
+    "page_url": "http://localhost:8000/",
+    "page_title": "企业智能搜索系统",
+    "referrer": "",
+    "browser": {
+      "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
+      "platform": "Win32",
+      "language": "zh-CN",
+      "languages": ["zh-CN", "zh", "en-US", "en"],
+      "cookie_enabled": true,
+      "do_not_track": null,
+      "timezone": "Asia/Shanghai",
+      "timezone_offset": -480,
+      "vendor": "Google Inc.",
+      "hardware_concurrency": 16,
+      "device_memory": 8
+    },
+    "screen": {
+      "width": 1920,
+      "height": 1080,
+      "avail_width": 1920,
+      "avail_height": 1040,
+      "color_depth": 24,
+      "pixel_ratio": 1.25,
+      "viewport_width": 1680,
+      "viewport_height": 920
+    },
+    "load_time_ms": 287,
+    "dom_ready_ms": 134,
+    "first_paint_ms": 198,
+    "dns_ms": 1,
+    "tcp_ms": 3,
+    "ttfb_ms": 38,
+    "fetch_start_ms": 0,
+    "redirect_count": 0,
+    "navigation_type": "navigate"
+  },
+
+  "step_3_click_send_btn": {
+    "description": "用户在 textarea 中输入问题后点击发送按钮，触发 click 事件",
+
+    "event_id": "evt_002_a3f7c002",
+    "trackName": "click",
+    "timestamp": "2026-06-01T20:31:05.678Z",
+    "fingerprint_id": "fp_a3f7c2d9e1b506482a91c78f3d45e0678b2c1d9a0f4e5b6789abc123def45678",
+    "session_id": "sess_x8k2m7p1q4w9r",
+    "page_url": "http://localhost:8000/",
+    "page_title": "企业智能搜索系统",
+    "referrer": "",
+    "browser": {
+      "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
+      "platform": "Win32",
+      "language": "zh-CN",
+      "languages": ["zh-CN", "zh", "en-US", "en"],
+      "cookie_enabled": true,
+      "do_not_track": null,
+      "timezone": "Asia/Shanghai",
+      "timezone_offset": -480,
+      "vendor": "Google Inc.",
+      "hardware_concurrency": 16,
+      "device_memory": 8
+    },
+    "screen": {
+      "width": 1920,
+      "height": 1080,
+      "avail_width": 1920,
+      "avail_height": 1040,
+      "color_depth": 24,
+      "pixel_ratio": 1.25,
+      "viewport_width": 1680,
+      "viewport_height": 920
+    },
+    "element": {
+      "tag": "BUTTON",
+      "id": "sendBtn",
+      "class_list": "",
+      "text": "",
+      "selector": "div.input-area > button#sendBtn",
+      "attributes": {
+        "id": "sendBtn",
+        "title": "发送"
+      }
+    },
+    "mouse": {
+      "client_x": 1462,
+      "client_y": 848,
+      "page_x": 1462,
+      "page_y": 848,
+      "button": 0
+    },
+    "modifiers": {
+      "ctrl_key": false,
+      "shift_key": false,
+      "alt_key": false,
+      "meta_key": false
+    }
+  },
+
+  "batch_send_to_server": {
+    "description": "前端积攒事件后，批量 POST 到服务端。以下是发送到 /api/tracking/events 的完整请求体。",
+    "request": {
+      "method": "POST",
+      "url": "/api/tracking/events",
+      "content_type": "application/json",
+      "body": [
+        {
+          "event_id": "evt_001_a3f7c001",
+          "trackName": "page_view",
+          "timestamp": "2026-06-01T20:30:45.123Z",
+          "fingerprint_id": "fp_a3f7c2d9e1b506482a91c78f3d45e0678b2c1d9a0f4e5b6789abc123def45678",
+          "session_id": "sess_x8k2m7p1q4w9r",
+          "page_url": "http://localhost:8000/",
+          "page_title": "企业智能搜索系统",
+          "referrer": "",
+          "browser": {
+            "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
+            "platform": "Win32",
+            "language": "zh-CN",
+            "languages": ["zh-CN", "zh", "en-US", "en"],
+            "cookie_enabled": true,
+            "do_not_track": null,
+            "timezone": "Asia/Shanghai",
+            "timezone_offset": -480,
+            "vendor": "Google Inc.",
+            "hardware_concurrency": 16,
+            "device_memory": 8
+          },
+          "screen": {
+            "width": 1920,
+            "height": 1080,
+            "avail_width": 1920,
+            "avail_height": 1040,
+            "color_depth": 24,
+            "pixel_ratio": 1.25,
+            "viewport_width": 1680,
+            "viewport_height": 920
+          },
+          "load_time_ms": 287,
+          "dom_ready_ms": 134,
+          "first_paint_ms": 198,
+          "dns_ms": 1,
+          "tcp_ms": 3,
+          "ttfb_ms": 38,
+          "fetch_start_ms": 0,
+          "redirect_count": 0,
+          "navigation_type": "navigate"
+        },
+        {
+          "event_id": "evt_002_a3f7c002",
+          "trackName": "click",
+          "timestamp": "2026-06-01T20:31:05.678Z",
+          "fingerprint_id": "fp_a3f7c2d9e1b506482a91c78f3d45e0678b2c1d9a0f4e5b6789abc123def45678",
+          "session_id": "sess_x8k2m7p1q4w9r",
+          "page_url": "http://localhost:8000/",
+          "page_title": "企业智能搜索系统",
+          "referrer": "http://localhost:8000/",
+          "browser": {
+            "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
+            "platform": "Win32",
+            "language": "zh-CN",
+            "languages": ["zh-CN", "zh", "en-US", "en"],
+            "cookie_enabled": true,
+            "do_not_track": null,
+            "timezone": "Asia/Shanghai",
+            "timezone_offset": -480,
+            "vendor": "Google Inc.",
+            "hardware_concurrency": 16,
+            "device_memory": 8
+          },
+          "screen": {
+            "width": 1920,
+            "height": 1080,
+            "avail_width": 1920,
+            "avail_height": 1040,
+            "color_depth": 24,
+            "pixel_ratio": 1.25,
+            "viewport_width": 1680,
+            "viewport_height": 920
+          },
+          "element": {
+            "tag": "BUTTON",
+            "id": "sendBtn",
+            "class_list": "",
+            "text": "",
+            "selector": "div.input-area > button#sendBtn",
+            "attributes": {
+              "id": "sendBtn",
+              "title": "发送"
+            }
+          },
+          "mouse": {
+            "client_x": 1462,
+            "client_y": 848,
+            "page_x": 1462,
+            "page_y": 848,
+            "button": 0
+          },
+          "modifiers": {
+            "ctrl_key": false,
+            "shift_key": false,
+            "alt_key": false,
+            "meta_key": false
+          }
+        }
+      ]
+    }
+  }
+}

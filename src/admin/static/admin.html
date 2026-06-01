@@ -1,0 +1,460 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>数据库管理 - 企业智能搜索系统</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#f5f7fa;display:flex;height:100vh;color:#333}
+.sidebar{width:240px;background:#1e293b;color:#fff;display:flex;flex-direction:column;overflow-y:auto;flex-shrink:0}
+.sidebar h2{padding:20px 16px 12px;font-size:15px;color:#94a3b8;text-transform:uppercase;letter-spacing:1px}
+.sidebar a{display:flex;justify-content:space-between;padding:10px 16px;color:#cbd5e1;text-decoration:none;font-size:14px;border-left:3px solid transparent;transition:all .15s}
+.sidebar a:hover,.sidebar a.active{background:#334155;color:#fff;border-left-color:#3b82f6}
+.sidebar a .badge{font-size:11px;background:#475569;color:#94a3b8;padding:1px 7px;border-radius:8px}
+.main{flex:1;display:flex;flex-direction:column;overflow:hidden}
+.toolbar{display:flex;align-items:center;gap:12px;padding:12px 20px;background:#fff;border-bottom:1px solid #e2e8f0;flex-shrink:0}
+.toolbar h1{font-size:18px;font-weight:600;margin-right:auto}
+.toolbar input{padding:6px 12px;border:1px solid #d1d5db;border-radius:6px;font-size:13px;width:220px;outline:none}
+.toolbar input:focus{border-color:#3b82f6;box-shadow:0 0 0 2px rgba(59,130,246,.15)}
+.toolbar button{padding:6px 16px;border:0;border-radius:6px;font-size:13px;cursor:pointer}
+.btn-primary{background:#3b82f6;color:#fff}
+.btn-primary:hover{background:#2563eb}
+.btn-warn{background:#f59e0b;color:#fff}
+.btn-warn:hover{background:#d97706}
+.btn-ghost{background:transparent;border:1px solid #d1d5db!important;color:#475569}
+.btn-ghost:hover{background:#f1f5f9}
+.content{flex:1;overflow:auto;padding:16px 20px}
+.stats{display:flex;gap:16px;margin-bottom:16px}
+.stat{background:#fff;padding:16px 20px;border-radius:8px;box-shadow:0 1px 2px rgba(0,0,0,.05);flex:1;max-width:200px}
+.stat .val{font-size:24px;font-weight:700;color:#1e293b}
+.stat .lbl{font-size:12px;color:#64748b;margin-top:2px}
+table{width:100%;background:#fff;border-radius:8px;overflow:hidden;box-shadow:0 1px 2px rgba(0,0,0,.05);border-collapse:collapse}
+th,td{padding:8px 12px;text-align:left;font-size:13px;white-space:nowrap;max-width:350px;overflow:hidden;text-overflow:ellipsis}
+th{background:#f8fafc;color:#475569;font-weight:600;cursor:pointer;user-select:none;border-bottom:2px solid #e2e8f0}
+th:hover{color:#1e293b}
+th.sorted{color:#3b82f6}
+td{border-bottom:1px solid #f1f5f9}
+tr.disabled-row td{opacity:.45;background:#f1f5f9}
+tr.disabled-row td.actions{opacity:1}
+td.actions{white-space:nowrap}
+td.actions button{padding:3px 10px;margin-right:4px;font-size:12px;border-radius:4px;border:0;cursor:pointer}
+.null{color:#94a3b8;font-style:italic}
+.pagination{display:flex;align-items:center;justify-content:center;gap:4px;margin-top:16px}
+.pagination button{padding:6px 12px;border:1px solid #d1d5db;background:#fff;border-radius:6px;cursor:pointer;font-size:13px}
+.pagination button:hover:not(:disabled){background:#f1f5f9}
+.pagination button:disabled{opacity:.4;cursor:default}
+.pagination span{font-size:13px;color:#64748b;margin:0 8px}
+.schema-panel{background:#fff;border-radius:8px;padding:16px 20px;margin-bottom:16px;box-shadow:0 1px 2px rgba(0,0,0,.05)}
+.schema-panel h3{font-size:14px;margin-bottom:8px;color:#475569}
+.schema-col{display:flex;gap:8px;font-size:12px;font-family:'JetBrains Mono',monospace;padding:3px 0}
+.schema-col .col-name{color:#3b82f6;font-weight:600;min-width:180px}
+.schema-col .col-type{color:#059669;min-width:120px}
+.schema-col .col-meta{color:#94a3b8}
+.empty-state{text-align:center;padding:80px 20px;color:#94a3b8}
+.empty-state .icon{font-size:48px;margin-bottom:12px}
+.code{font-family:'JetBrains Mono',monospace;font-size:12px;background:#f1f5f9;padding:2px 6px;border-radius:3px}
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.4);display:flex;align-items:center;justify-content:center;z-index:1000}
+.modal{background:#fff;border-radius:12px;width:560px;max-height:80vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.15)}
+.modal-header{padding:16px 20px;border-bottom:1px solid #e2e8f0;display:flex;align-items:center;justify-content:space-between}
+.modal-header h2{font-size:16px}
+.modal-close{background:0;border:0;font-size:20px;cursor:pointer;color:#94a3b8;padding:4px 8px}
+.modal-body{padding:16px 20px}
+.modal-footer{padding:12px 20px;border-top:1px solid #e2e8f0;display:flex;gap:8px;justify-content:flex-end}
+.form-group{margin-bottom:12px}
+.form-group label{display:block;font-size:12px;font-weight:600;color:#475569;margin-bottom:4px;text-transform:lowercase}
+.form-group label .pk-tag{color:#ef4444;font-size:10px;margin-left:4px}
+.form-group label .null-tag{color:#f59e0b;font-size:10px;margin-left:4px}
+.form-group label .auto-tag{color:#3b82f6;font-size:10px;margin-left:4px}
+.form-group input,.form-group textarea,.form-group select{width:100%;padding:7px 10px;border:1px solid #d1d5db;border-radius:6px;font-size:13px;font-family:inherit;outline:none}
+.form-group input:focus,.form-group textarea:focus{border-color:#3b82f6;box-shadow:0 0 0 2px rgba(59,130,246,.15)}
+.form-group input[readonly]{background:#f1f5f9;color:#64748b}
+.form-group textarea{min-height:80px;resize:vertical;font-family:'JetBrains Mono',monospace;font-size:12px}
+.toast{position:fixed;top:20px;right:20px;padding:10px 20px;border-radius:8px;color:#fff;font-size:13px;z-index:2000;animation:slideIn .25s ease}
+.toast.success{background:#059669}
+.toast.error{background:#ef4444}
+@keyframes slideIn{from{transform:translateX(100%);opacity:0}to{transform:translateX(0);opacity:1}}
+</style>
+</head>
+<body>
+
+<div class="sidebar" id="sidebar">
+  <h2>数据库表</h2>
+</div>
+
+<div class="main">
+  <div class="toolbar">
+    <h1 id="table-title">选择一张表</h1>
+    <button class="btn-primary" id="btn-add" style="display:none" onclick="openAddModal()">+ 新增行</button>
+    <input type="text" id="search-input" placeholder="搜索..." oninput="loadRows()">
+  </div>
+  <div class="content">
+    <div id="stats-row" class="stats" style="display:none"></div>
+    <div id="schema-panel" class="schema-panel" style="display:none"></div>
+    <div style="overflow-x:auto">
+      <table id="data-table" style="display:none"><thead><tr id="table-head"></tr></thead><tbody id="table-body"></tbody></table>
+    </div>
+    <div class="empty-state" id="empty-state"><div class="icon">&#128195;</div><p>选择左侧的表开始浏览数据</p></div>
+    <div class="pagination" id="pagination" style="display:none"></div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modal" style="display:none" onclick="onOverlayClick(event)">
+  <div class="modal">
+    <div class="modal-header">
+      <h2 id="modal-title">编辑</h2>
+      <button class="modal-close" onclick="closeModal()">&times;</button>
+    </div>
+    <div class="modal-body" id="modal-body"></div>
+    <div class="modal-footer">
+      <button class="btn-ghost" onclick="closeModal()">取消</button>
+      <button class="btn-primary" id="modal-save" onclick="saveRow()">保存</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="confirm-modal" style="display:none" onclick="onConfirmOverlayClick(event)">
+  <div class="modal" style="width:420px">
+    <div class="modal-header">
+      <h2>确认操作</h2>
+      <button class="modal-close" onclick="closeConfirmModal(false)">&times;</button>
+    </div>
+    <div class="modal-body" id="confirm-body" style="line-height:1.6"></div>
+    <div class="modal-footer">
+      <button class="btn-ghost" onclick="closeConfirmModal(false)">取消</button>
+      <button class="btn-warn" id="confirm-ok" onclick="closeConfirmModal(true)">确认停用</button>
+    </div>
+  </div>
+</div>
+
+<script src="/static/tracker.js"></script>
+<script>
+let currentTable = '', currentPage = 1, sortBy = '', sortDir = 'asc';
+let currentSchema = null, editingRow = null, isEditMode = false;
+let nextIdValue = null;
+let currentRows = [];
+let schemaCache = {};
+const READONLY_TABLES = ['log_entries', 'orders', 'order_items', 'tracking_events', 'tracking_sessions'];
+
+async function init() {
+  const res = await fetch('/admin/api/tables');
+  const data = await res.json();
+  const sidebar = document.getElementById('sidebar');
+  data.tables.forEach(t => {
+    const a = document.createElement('a');
+    a.href = 'javascript:void(0)';
+    a.innerHTML = `${t.name} <span class="badge">${t.row_count}</span>`;
+    a.onclick = () => selectTable(t.name);
+    sidebar.appendChild(a);
+  });
+}
+
+async function selectTable(name) {
+  currentTable = name; currentPage = 1; editingRow = null;
+  document.getElementById('table-title').textContent = name;
+  document.getElementById('search-input').value = '';
+  document.getElementById('btn-add').style.display = READONLY_TABLES.includes(name) ? 'none' : '';
+  document.querySelectorAll('.sidebar a').forEach(a => a.classList.remove('active'));
+  document.querySelectorAll('.sidebar a').forEach(a => { if (a.textContent.startsWith(name)) a.classList.add('active'); });
+  await Promise.all([loadSchema(), loadRows()]);
+}
+
+async function loadSchema() {
+  if (schemaCache[currentTable]) { currentSchema = schemaCache[currentTable]; renderSchema(); return; }
+  const res = await fetch(`/admin/api/tables/${currentTable}/schema`);
+  currentSchema = await res.json();
+  schemaCache[currentTable] = currentSchema;
+  renderSchema();
+}
+
+function renderSchema() {
+  const data = currentSchema;
+  const panel = document.getElementById('schema-panel');
+  panel.style.display = 'block';
+  let html = '<h3>表结构</h3>';
+  data.columns.forEach(c => {
+    let meta = [];
+    if (c.primary_key) meta.push('主键');
+    if (!c.nullable) meta.push('NOT NULL');
+    if (c.default) meta.push(`默认: ${c.default}`);
+    if (c.autoincrement) meta.push('自增');
+    html += `<div class="schema-col">
+      <span class="col-name">${c.name}</span>
+      <span class="col-type">${c.type}</span>
+      <span class="col-meta">${meta.join(' | ') || ''}</span>
+    </div>`;
+  });
+  if (data.foreign_keys.length) {
+    html += '<div style="margin-top:8px;font-size:12px;color:#64748b">外键: ';
+    data.foreign_keys.forEach(fk => {
+      html += `<span class="code">${fk.constrained_columns.join(',')} → ${fk.referred_table}(${fk.referred_columns.join(',')})</span> `;
+    });
+    html += '</div>';
+  }
+  panel.innerHTML = html;
+}
+
+async function loadRows() {
+  const search = document.getElementById('search-input').value;
+  const params = new URLSearchParams({ page: currentPage, per_page: 50, search, order_by: sortBy, order_dir: sortDir });
+  const res = await fetch(`/admin/api/tables/${currentTable}/rows?${params}`);
+  const data = await res.json();
+  document.getElementById('empty-state').style.display = 'none';
+
+  document.getElementById('stats-row').style.display = 'flex';
+  document.getElementById('stats-row').innerHTML = `
+    <div class="stat"><div class="val">${data.total}</div><div class="lbl">总行数</div></div>
+    <div class="stat"><div class="val">${data.page}/${data.total_pages}</div><div class="lbl">当前页/总页数</div></div>`;
+
+  const head = document.getElementById('table-head');
+  head.innerHTML = data.columns.map(c =>
+    `<th onclick="toggleSort('${c}')" class="${c===sortBy?'sorted':''}">${c} ${c===sortBy?(sortDir==='asc'?'↑':'↓'):''}</th>`
+  ).join('') + (READONLY_TABLES.includes(currentTable) ? '' : '<th style="width:120px;cursor:default">操作</th>');
+
+  currentRows = data.rows;
+  const body = document.getElementById('table-body');
+  body.innerHTML = data.rows.map((row, idx) =>
+    `<tr class="${isRowDisabled(row) ? 'disabled-row' : ''}">${data.columns.map(c => {
+      const v = row[c];
+      if (v === null || v === undefined) return '<td class="null">NULL</td>';
+      const s = String(v);
+      return `<td title="${s.replace(/"/g,'&quot;')}">${escapeHtml(s.length > 200 ? s.slice(0,200)+'...' : s)}</td>`;
+    }).join('')}
+    ${READONLY_TABLES.includes(currentTable) ? '' :
+      `<td class="actions">
+        ${isRowDisabled(row)
+          ? `<button style="background:#059669;color:#fff" data-action="enable" data-idx="${idx}">启用</button>`
+          : `<button style="background:#dbeafe;color:#1d4ed8" data-action="edit" data-idx="${idx}">编辑</button>
+             <button class="btn-warn" data-action="disable" data-idx="${idx}">停用</button>`}
+      </td>`}
+    </tr>`
+  ).join('');
+
+  document.getElementById('data-table').style.display = '';
+
+  const pag = document.getElementById('pagination');
+  pag.style.display = 'flex';
+  pag.innerHTML = `
+    <button onclick="goPage(1)" ${currentPage<=1?'disabled':''}>首页</button>
+    <button onclick="goPage(${currentPage-1})" ${currentPage<=1?'disabled':''}>上一页</button>
+    <span>第 ${data.page} 页 / 共 ${data.total_pages} 页</span>
+    <button onclick="goPage(${currentPage+1})" ${currentPage>=data.total_pages?'disabled':''}>下一页</button>
+    <button onclick="goPage(${data.total_pages})" ${currentPage>=data.total_pages?'disabled':''}>末页</button>`;
+}
+
+function toggleSort(col) { if (sortBy === col) { sortDir = sortDir === 'asc' ? 'desc' : 'asc'; } else { sortBy = col; sortDir = 'asc'; } loadRows(); }
+function goPage(p) { currentPage = p; loadRows(); }
+
+async function openAddModal() {
+  isEditMode = false; editingRow = null; nextIdValue = null;
+  try {
+    const res = await fetch(`/admin/api/tables/${currentTable}/max-id`);
+    const data = await res.json();
+    nextIdValue = data.next_id;
+  } catch (e) { nextIdValue = null; }
+
+  document.getElementById('modal-title').textContent = `新增行 - ${currentTable}`;
+  document.getElementById('modal-body').innerHTML = buildForm({}, nextIdValue);
+  document.getElementById('modal').style.display = 'flex';
+}
+
+function editRow(row) {
+  isEditMode = true; editingRow = row;
+  document.getElementById('modal-title').textContent = `编辑行 - ${currentTable}`;
+  document.getElementById('modal-body').innerHTML = buildForm(row, null);
+  document.getElementById('modal').style.display = 'flex';
+}
+
+function buildForm(row, nextId) {
+  if (!currentSchema) return '<p>请先选择表</p>';
+  const pks = new Set(currentSchema.primary_keys);
+  const idCol = currentSchema.columns.find(c => c.name.toLowerCase() === 'id');
+  const isAutoId = idCol && idCol.autoincrement && pks.has(idCol.name);
+
+  return currentSchema.columns.map(c => {
+    let val;
+    const isPk = pks.has(c.name);
+    const isAutoPk = isPk && c.autoincrement;
+
+    if (isEditMode) {
+      // Edit mode: use existing row values
+      val = row[c.name] !== undefined ? row[c.name] : '';
+      if (val === null || val === undefined) val = '';
+    } else {
+      // Add mode: pre-fill auto-increment id with nextId, others with default
+      if (isAutoPk && nextId !== null) {
+        val = nextId;
+      } else {
+        val = row[c.name] !== undefined ? row[c.name] : (c.default && c.default !== 'None' ? c.default : '');
+      }
+    }
+
+    // id autoincrement PK: readonly in edit mode, pre-filled in add mode
+    const readonly = isAutoPk && isEditMode;
+    const typeHint = c.type.toUpperCase().includes('INT') || c.type.toUpperCase().includes('FLOAT') || c.type.toUpperCase().includes('NUMERIC') ? 'number' : 'text';
+    const isLong = c.type.toUpperCase().includes('TEXT') || c.type.toUpperCase().includes('CLOB') || (typeof val === 'string' && val.length > 100);
+    const valStr = val === null || val === undefined ? '' : String(val);
+
+    let labelExtra = '';
+    if (isPk) labelExtra += '<span class="pk-tag">PK</span>';
+    if (c.autoincrement) labelExtra += '<span class="auto-tag">自增</span>';
+    if (!c.nullable) labelExtra += '<span class="null-tag">*</span>';
+    if (!isEditMode && isAutoPk && nextId !== null) labelExtra += ` <span style="color:#3b82f6;font-size:10px">(max+1)</span>`;
+
+    return `<div class="form-group">
+      <label>${c.name}${labelExtra}</label>
+      ${isLong
+        ? `<textarea name="${c.name}" ${readonly?'readonly':''}>${valStr.replace(/</g,'&lt;')}</textarea>`
+        : `<input name="${c.name}" type="${typeHint}" value="${valStr.replace(/"/g,'&quot;')}" ${readonly?'readonly':''} step="any">`}
+    </div>`;
+  }).join('');
+}
+
+async function saveRow() {
+  const formInputs = document.querySelectorAll('#modal-body input, #modal-body textarea, #modal-body select');
+  const data = {};
+  formInputs.forEach(el => {
+    let v = el.value;
+    if (v === '') v = null;
+    else if (v === 'None') v = null;
+    else if (el.type === 'number' && v !== null) v = isNaN(Number(v)) ? v : Number(v);
+    data[el.name] = v;
+  });
+
+  try {
+    if (isEditMode) {
+      const pkCols = currentSchema.primary_keys.length ? currentSchema.primary_keys : [currentSchema.columns[0].name];
+      const where = {};
+      pkCols.forEach(pk => { if (editingRow[pk] !== undefined) where[pk] = editingRow[pk]; });
+      const res = await fetch(`/admin/api/tables/${currentTable}/rows`, {
+        method: 'PUT', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ data, where })
+      });
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.detail || '更新失败');
+      showToast('success', result.message || '已更新');
+    } else {
+      const res = await fetch(`/admin/api/tables/${currentTable}/rows`, {
+        method: 'POST', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify(data)
+      });
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.detail || '插入失败');
+      showToast('success', result.message || '已插入');
+    }
+    closeModal();
+    schemaCache = {};
+    await selectTable(currentTable);
+  } catch (e) {
+    showToast('error', e.message);
+  }
+}
+
+let confirmResolve = null;
+
+function showConfirm(message, btnText = '确认') {
+  document.getElementById('confirm-body').innerHTML = message;
+  document.getElementById('confirm-ok').textContent = btnText;
+  document.getElementById('confirm-modal').style.display = 'flex';
+  return new Promise(resolve => { confirmResolve = resolve; });
+}
+
+function closeConfirmModal(result) {
+  document.getElementById('confirm-modal').style.display = 'none';
+  if (confirmResolve) { confirmResolve(result); confirmResolve = null; }
+}
+
+function onConfirmOverlayClick(e) {
+  if (e.target === document.getElementById('confirm-modal')) closeConfirmModal(false);
+}
+
+function isRowDisabled(row) {
+  if (row.status !== undefined && (row.status === 'inactive' || row.status === 'archived' || row.status === 'cancelled')) return true;
+  if (row.is_deleted !== undefined && row.is_deleted) return true;
+  if (row.deleted_at !== undefined && row.deleted_at !== null) return true;
+  return false;
+}
+
+async function enableRow(row) {
+  const pkCols = currentSchema.primary_keys.length ? currentSchema.primary_keys : [currentSchema.columns[0].name];
+  const where = {};
+  pkCols.forEach(pk => { if (row[pk] !== undefined) where[pk] = row[pk]; });
+
+  const pkDisplay = Object.entries(where).map(([k,v]) => `${k}=${v}`).join(', ');
+  const ok = await showConfirm(`确定要<b>启用</b>这条记录吗？<br><br><b>${pkDisplay}</b>`, '确认启用');
+  if (!ok) return;
+
+  try {
+    const res = await fetch(`/admin/api/tables/${currentTable}/rows/soft-enable`, {
+      method: 'PUT', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify(where)
+    });
+    const result = await res.json();
+    if (!res.ok) throw new Error(result.detail || '启用失败');
+    showToast('success', result.message || '已启用');
+    await loadRows();
+  } catch (e) {
+    showToast('error', e.message);
+  }
+}
+
+async function disableRow(row) {
+  const pkCols = currentSchema.primary_keys.length ? currentSchema.primary_keys : [currentSchema.columns[0].name];
+  const where = {};
+  pkCols.forEach(pk => { if (row[pk] !== undefined) where[pk] = row[pk]; });
+
+  const pkDisplay = Object.entries(where).map(([k,v]) => `${k}=${v}`).join(', ');
+  const ok = await showConfirm(`确定要停用这条记录吗？<br><br><b>${pkDisplay}</b><br><br>数据将保留，仅标记为不可用状态。`, '确认停用');
+  if (!ok) return;
+
+  try {
+    const res = await fetch(`/admin/api/tables/${currentTable}/rows/soft-delete`, {
+      method: 'PUT', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify(where)
+    });
+    const result = await res.json();
+    if (!res.ok) throw new Error(result.detail || '停用失败');
+    showToast('success', result.message || '已停用');
+    await loadRows();
+  } catch (e) {
+    showToast('error', e.message);
+  }
+}
+
+function closeModal() { document.getElementById('modal').style.display = 'none'; }
+function onOverlayClick(e) { if (e.target === document.getElementById('modal')) closeModal(); }
+
+function showToast(type, msg) {
+  const t = document.createElement('div');
+  t.className = `toast ${type}`;
+  t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(() => t.remove(), 2500);
+}
+
+function escapeHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') {
+    if (document.getElementById('confirm-modal').style.display === 'flex') closeConfirmModal(false);
+    else if (document.getElementById('modal').style.display === 'flex') closeModal();
+  }
+});
+
+document.getElementById('table-body').addEventListener('click', function(e) {
+  const btn = e.target.closest('button[data-action]');
+  if (!btn) return;
+  const idx = parseInt(btn.dataset.idx);
+  const row = currentRows[idx];
+  if (!row) return;
+  if (btn.dataset.action === 'edit') editRow(row);
+  else if (btn.dataset.action === 'disable') disableRow(row);
+  else if (btn.dataset.action === 'enable') enableRow(row);
+});
+
+init();
+</script>
+</body>
+</html>

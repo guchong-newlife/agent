@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>埋点数据管理 - 企业智能搜索系统</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#f5f7fa;color:#333;display:flex;height:100vh}
+.sidebar{width:200px;background:#1e293b;color:#fff;display:flex;flex-direction:column;flex-shrink:0;padding:16px 0}
+.sidebar a{color:#cbd5e1;text-decoration:none;padding:10px 20px;font-size:14px;border-left:3px solid transparent}
+.sidebar a:hover,.sidebar a.active{background:#334155;color:#fff;border-left-color:#3b82f6}
+.main{flex:1;display:flex;flex-direction:column;overflow:hidden}
+.toolbar{display:flex;align-items:center;gap:10px;padding:12px 20px;background:#fff;border-bottom:1px solid #e2e8f0;flex-shrink:0;flex-wrap:wrap}
+.toolbar h1{font-size:18px;font-weight:600;margin-right:auto}
+.toolbar select,.toolbar input,.toolbar button{padding:6px 10px;border:1px solid #d1d5db;border-radius:6px;font-size:13px;outline:none}
+.toolbar select:focus,.toolbar input:focus{border-color:#3b82f6}
+.btn{background:#3b82f6;color:#fff;border:0;cursor:pointer;padding:6px 14px;font-size:13px;border-radius:6px}
+.btn:hover{background:#2563eb}
+.content{flex:1;overflow:auto;padding:16px 20px}
+.stats{display:flex;gap:12px;margin-bottom:16px;flex-wrap:wrap}
+.stat{background:#fff;padding:14px 18px;border-radius:8px;box-shadow:0 1px 2px rgba(0,0,0,.05);min-width:140px}
+.stat .val{font-size:22px;font-weight:700;color:#1e293b}
+.stat .lbl{font-size:12px;color:#64748b;margin-top:2px}
+table{width:100%;background:#fff;border-radius:8px;overflow:hidden;box-shadow:0 1px 2px rgba(0,0,0,.05);border-collapse:collapse;table-layout:fixed}
+th,td{padding:8px 10px;text-align:left;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+th{background:#f8fafc;color:#475569;font-weight:600;border-bottom:2px solid #e2e8f0}
+td{border-bottom:1px solid #f1f5f9}
+tr:hover td{background:#f1f5f9}
+.pagination{display:flex;align-items:center;justify-content:center;gap:4px;margin-top:14px}
+.pagination button{padding:5px 10px;border:1px solid #d1d5db;background:#fff;border-radius:5px;cursor:pointer;font-size:12px}
+.pagination button:disabled{opacity:.4;cursor:default}
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.4);display:flex;align-items:center;justify-content:center;z-index:1000}
+.modal{background:#fff;border-radius:12px;width:720px;max-height:85vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.15)}
+.modal-header{padding:14px 20px;border-bottom:1px solid #e2e8f0;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;background:#fff;z-index:1}
+.modal-header h2{font-size:16px}
+.modal-close{border:0;background:0;font-size:22px;cursor:pointer;color:#94a3b8}
+.modal-body{padding:16px 20px}
+.modal-body pre{background:#1e293b;color:#e2e8f0;border-radius:8px;padding:14px;font-size:12px;overflow-x:auto;white-space:pre-wrap;word-break:break-all;line-height:1.5}
+.info-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px}
+.info-item{font-size:13px}
+.info-item .label{color:#64748b;font-size:11px}
+.badge{display:inline-block;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:600}
+.badge-page_view{background:#dbeafe;color:#1d4ed8}
+.badge-click{background:#fef3c7;color:#92400e}
+.badge-scroll{background:#d1fae5;color:#065f46}
+.badge-visibility{background:#ede9fe;color:#5b21b6}
+.badge-error{background:#fee2e2;color:#991b1b}
+</style>
+</head>
+<body>
+
+<div class="sidebar">
+  <a href="#" data-view="events" class="active" onclick="switchView('events')">事件列表</a>
+  <a href="#" data-view="sessions" onclick="switchView('sessions')">会话列表</a>
+</div>
+
+<div class="main">
+  <div class="toolbar">
+    <h1 id="view-title">埋点事件</h1>
+    <select id="filter-track" onchange="reload()">
+      <option value="">全部类型</option>
+      <option value="page_view">page_view</option>
+      <option value="click">click</option>
+      <option value="scroll">scroll</option>
+      <option value="visibility">visibility</option>
+      <option value="error">error</option>
+      <option value="custom">custom</option>
+    </select>
+    <input type="text" id="filter-fp" placeholder="指纹ID..." style="width:180px" onchange="reload()">
+    <select id="filter-days" onchange="reload()">
+      <option value="1">今天</option>
+      <option value="7" selected>近7天</option>
+      <option value="30">近30天</option>
+    </select>
+    <button class="btn" onclick="reload()">刷新</button>
+  </div>
+  <div class="content">
+    <div id="stats-row" class="stats"></div>
+    <div style="overflow-x:auto"><table id="data-table"><thead><tr id="table-head"></tr></thead><tbody id="table-body"></tbody></table></div>
+    <div class="pagination" id="pagination"></div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modal" style="display:none" onclick="if(event.target===this)closeModal()">
+  <div class="modal"><div class="modal-header"><h2 id="modal-title">事件详情</h2><button class="modal-close" onclick="closeModal()">&times;</button></div><div class="modal-body" id="modal-body"></div></div>
+</div>
+
+<script>
+var view = 'events', page = 1;
+
+function switchView(v) {
+  view = v; page = 1;
+  document.querySelectorAll('.sidebar a').forEach(function(a) { a.classList.toggle('active', a.dataset.view === v); });
+  document.getElementById('view-title').textContent = v === 'events' ? '埋点事件' : '用户会话';
+  document.getElementById('filter-track').style.display = v === 'events' ? '' : 'none';
+  reload();
+}
+
+async function loadStats() {
+  var r = await fetch('/api/tracking/stats?days_back=' + document.getElementById('filter-days').value);
+  var d = await r.json();
+  document.getElementById('stats-row').innerHTML =
+    '<div class="stat"><div class="val">' + d.total_events + '</div><div class="lbl">总事件数</div></div>' +
+    '<div class="stat"><div class="val">' + d.total_sessions + '</div><div class="lbl">会话数</div></div>' +
+    '<div class="stat"><div class="val">' + d.unique_visitors + '</div><div class="lbl">独立访客</div></div>' +
+    d.by_track_name.map(function(t) { return '<div class="stat"><div class="val">' + t.count + '</div><div class="lbl">' + t.name + '</div></div>'; }).join('');
+}
+
+async function reload() {
+  page = page || 1;
+  loadStats();
+  var track = document.getElementById('filter-track').value;
+  var fp = document.getElementById('filter-fp').value;
+  var days = document.getElementById('filter-days').value;
+
+  if (view === 'events') {
+    var params = 'days_back=' + days + '&page=' + page + '&per_page=50';
+    if (track) params += '&track_name=' + track;
+    if (fp) params += '&fingerprint_id=' + fp;
+    var r = await fetch('/api/tracking/admin/events?' + params);
+    var d = await r.json();
+
+    var cols = ['track_name','fingerprint_id','session_id','page_url','page_title','timestamp'];
+    document.getElementById('table-head').innerHTML = cols.map(function(c){return '<th>'+c+'</th>';}).join('') + '<th>详情</th>';
+
+    document.getElementById('table-body').innerHTML = d.events.map(function(e){
+      return '<tr>' + cols.map(function(c){
+        var v = e[c] || '';
+        var s = String(v);
+        if (c === 'track_name') return '<td><span class="badge badge-' + s + '">' + s + '</span></td>';
+        return '<td title="' + s.replace(/"/g,'&quot;') + '">' + (s.length > 60 ? s.slice(0,60)+'...' : s) + '</td>';
+      }).join('') + '<td><button class="btn" style="padding:3px 8px;font-size:11px" onclick="showDetail(\'' + e.event_id + '\')">查看</button></td></tr>';
+    }).join('');
+
+    renderPagination(d);
+  } else {
+    var r2 = await fetch('/api/tracking/admin/sessions?days_back=' + days + '&page=' + page);
+    var d2 = await r2.json();
+
+    document.getElementById('table-head').innerHTML = '<th>session_id</th><th>fingerprint_id</th><th>first_page_url</th><th>started_at</th><th>ended_at</th><th>event_count</th>';
+    document.getElementById('table-body').innerHTML = d2.sessions.map(function(s){
+      return '<tr><td>' + (s.session_id||'') + '</td><td>' + (s.fingerprint_id||'') + '</td><td>' + (s.first_page_url||'') + '</td><td>' + (s.started_at||'') + '</td><td>' + (s.ended_at||'') + '</td><td>' + s.event_count + '</td></tr>';
+    }).join('');
+    renderPagination(d2);
+  }
+}
+
+function renderPagination(d) {
+  var p = document.getElementById('pagination');
+  p.innerHTML = '<button onclick="goPage(' + (page-1) + ')" ' + (page<=1?'disabled':'') + '>上一页</button>' +
+    '<span style="font-size:12px;color:#64748b;margin:0 10px">' + d.page + '/' + d.total_pages + '</span>' +
+    '<button onclick="goPage(' + (page+1) + ')" ' + (page>=d.total_pages?'disabled':'') + '>下一页</button>';
+}
+
+function goPage(p) { page = p; reload(); }
+
+async function showDetail(eventId) {
+  var r = await fetch('/api/tracking/admin/event/' + eventId);
+  var d = await r.json();
+  if (d.error) return;
+  document.getElementById('modal-title').textContent = d.track_name + ' - ' + eventId;
+  var html = '<div class="info-grid">';
+  ['event_id','track_name','fingerprint_id','session_id','page_url','page_title','timestamp'].forEach(function(k){
+    html += '<div class="info-item"><div class="label">' + k + '</div>' + (d[k]||'') + '</div>';
+  });
+  html += '</div>';
+  if (d.session) {
+    html += '<div style="font-size:13px;margin-top:12px"><b>会话信息</b></div>';
+    html += '<div class="info-grid">';
+    ['session_id','fingerprint_id','first_page_url','user_agent','started_at','ended_at','event_count'].forEach(function(k){
+      html += '<div class="info-item"><div class="label">' + k + '</div>' + String(d.session[k]||'').substring(0,100) + '</div>';
+    });
+    html += '</div>';
+  }
+  html += '<div style="font-size:13px;margin:12px 0 4px"><b>完整 Payload</b></div>';
+  html += '<pre>' + JSON.stringify(d.payload, null, 2).replace(/</g,'&lt;') + '</pre>';
+  document.getElementById('modal-body').innerHTML = html;
+  document.getElementById('modal').style.display = 'flex';
+}
+
+function closeModal() { document.getElementById('modal').style.display = 'none'; }
+document.addEventListener('keydown', function(e) { if (e.key === 'Escape') closeModal(); });
+reload();
+</script>
+</body>
+</html>
