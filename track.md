@@ -85,6 +85,7 @@ window.__TrackerSDK           // 构造函数，可 new 创建新实例
 | `sessionEndpoint` | string | `/api/tracking/session` | 会话上报接口 |
 | `sendMode` | string | `get` | 上报方式：`get` / `post` / `beacon` |
 | `mode` | string | `auto` | 采集模式：`auto`（自动监听）/ `manual`（仅手动调用） |
+| `autoFingerprint` | boolean | `true` | 无缓存时是否自动生成浏览器指纹；`false` 时需手动调用 `load()` |
 | `cookieDomain` | string | `''` | Cookie 域名，如 `.example.com` 实现跨子域名 |
 | `cookieDays` | number | `365` | Cookie 有效期（天） |
 | `debug` | boolean | `false` | 是否在控制台打印上报 JSON |
@@ -96,7 +97,33 @@ window.__TrackerSDK           // 构造函数，可 new 创建新实例
 
 ## 5. API 方法
 
-### 5.1 track(name, payload?)
+### 5.1 load(userFingerprint)
+
+设置自定义浏览器指纹，替换 SDK 自动生成的值。调用后指纹持久化到 Cookie 和 localStorage，后续页面访问直接读取缓存。
+
+```javascript
+window.__tracker.load('user_zhihu_homepage');
+```
+
+| 参数 | 类型 | 说明 |
+|------|------|------|
+| `userFingerprint` | string | 自定义指纹字符串，如用户 ID 或业务标识 |
+
+**执行逻辑**：
+
+1. 设置 `fpId = userFingerprint`
+2. 写入 Cookie `__fp_id`（受 `cookieDomain` 和 `cookieDays` 控制）
+3. 写入 `localStorage.__fp_id`
+4. 发送所有等待中的事件（`autoFingerprint: false` 时，`load()` 调用前的事件暂存在队列中不丢失）
+
+**与 `autoFingerprint` 配合**：
+
+| autoFingerprint | 无缓存时的行为 |
+|-----------------|---------------|
+| `true`（默认） | 自动生成浏览器指纹，`load()` 可选覆盖 |
+| `false` | 不自动生成，必须调用 `load()` 设置自定义指纹 |
+
+### 5.2 track(name, payload?)
 
 上报自定义事件。
 
@@ -112,7 +139,7 @@ window.__tracker.track('purchase', {
 | `name` | string | 事件名称，对应上报 JSON 的 `trackName` 字段 |
 | `payload` | object | 可选，合并到上报 JSON 中 |
 
-### 5.2 trackPageView()
+### 5.3 trackPageView()
 
 手动上报页面浏览事件，含性能指标。
 
@@ -123,7 +150,7 @@ router.afterEach(function () {
 });
 ```
 
-### 5.3 trackError(message, stack?)
+### 5.4 trackError(message, stack?)
 
 手动上报错误事件。
 
@@ -135,7 +162,7 @@ try {
 }
 ```
 
-### 5.4 getFingerprint()
+### 5.5 getFingerprint()
 
 获取当前浏览器指纹 ID。
 
@@ -144,7 +171,7 @@ var fpId = window.__tracker.getFingerprint();
 // "fp_a3f7c2d9e1b506482a91c78f3d45e0678b2c1d9a0f4e5b6789"
 ```
 
-### 5.5 getSession()
+### 5.6 getSession()
 
 获取当前会话 ID。
 
@@ -153,7 +180,7 @@ var sid = window.__tracker.getSession();
 // "sess_x8k2m7p1q4w9r"
 ```
 
-### 5.6 getMode()
+### 5.7 getMode()
 
 获取当前采集模式。
 
@@ -243,26 +270,15 @@ window.__tracker.getMode(); // "auto" 或 "manual"
 
 ## 9. 上报事件 JSON 格式
 
-### 9.1 公共字段（所有事件均包含）
+事件数据分为三层：用户信息 `user`、浏览器信息 `browser`、上报数据 `data`。每条事件由 SDK 自动生成唯一 `track_id`（格式 `trk_<时间戳36进制>_<序号>`）。
+
+### 9.1 公共结构
 
 ```json
 {
-  "event_id": "evt_a1b2c3d4e5f6g7h8i9",
-  "trackName": "page_view | click | scroll | visibility | error | <自定义>",
-  "timestamp": "2026-06-02T12:00:00.000Z",
-  "fingerprint_id": "fp_a3f7c2d9e1b506482a91c78f3d45e0678b2c1d9a0f4e5b6789",
-  "session_id": "sess_x8k2m7p1q4w9r",
-  "page_url": "http://localhost:8000/",
-  "page_title": "企业智能搜索系统",
-  "referrer": ""
-}
-```
-
-### 9.2 page_view
-
-```json
-{
-  "trackName": "page_view",
+  "user": {
+    "fingerprint_id": "fp_a3f7c2d9e1b506482a91c78f3d45e0678b2c1d9a0f4e5b6789"
+  },
   "browser": {
     "user_agent": "Mozilla/5.0 ...",
     "platform": "Win32",
@@ -274,20 +290,47 @@ window.__tracker.getMode(); // "auto" 或 "manual"
     "timezone_offset": -480,
     "vendor": "Google Inc.",
     "hardware_concurrency": 16,
-    "device_memory": 8
+    "device_memory": 8,
+    "page_url": "http://localhost:8000/",
+    "page_title": "企业智能搜索系统",
+    "referrer": "",
+    "screen": {
+      "width": 1920, "height": 1080,
+      "avail_width": 1920, "avail_height": 1040,
+      "color_depth": 24, "pixel_ratio": 1.25,
+      "viewport_width": 1680, "viewport_height": 920
+    }
   },
-  "screen": {
-    "width": 1920, "height": 1080,
-    "avail_width": 1920, "avail_height": 1040,
-    "color_depth": 24, "pixel_ratio": 1.25,
-    "viewport_width": 1680, "viewport_height": 920
-  },
-  "load_time_ms": 287,
-  "dom_ready_ms": 134,
-  "first_paint_ms": 198,
-  "dns_ms": 1, "tcp_ms": 3, "ttfb_ms": 38,
-  "fetch_start_ms": 0, "redirect_count": 0,
-  "navigation_type": "navigate"
+  "data": {
+    "track_id": "trk_m7x2a3p1_00001",
+    "trackName": "page_view",
+    "timestamp": "2026-06-02T12:00:00.000Z",
+    "session_id": "sess_x8k2m7p1q4w9r",
+    // ... 事件特有系统字段
+    "custom": {
+      // ... 用户自定义字段
+    }
+  }
+}
+```
+
+### 9.2 page_view
+
+```json
+{
+  "user": { "fingerprint_id": "fp_..." },
+  "browser": { "...": "...", "screen": { "...": "..." } },
+  "data": {
+    "trackName": "page_view",
+    "timestamp": "2026-06-02T12:00:00.000Z",
+    "session_id": "sess_x8k2m7p1q4w9r",
+    "load_time_ms": 287,
+    "dom_ready_ms": 134,
+    "first_paint_ms": 198,
+    "dns_ms": 1, "tcp_ms": 3, "ttfb_ms": 38,
+    "fetch_start_ms": 0, "redirect_count": 0,
+    "navigation_type": "navigate"
+  }
 }
 ```
 
@@ -295,25 +338,19 @@ window.__tracker.getMode(); // "auto" 或 "manual"
 
 ```json
 {
-  "trackName": "click",
-  "browser": { "..." : "..." },
-  "screen": { "..." : "..." },
-  "element": {
-    "tag": "BUTTON",
-    "id": "sendBtn",
-    "class_list": "",
-    "text": "",
-    "selector": "div.input-area > button#sendBtn",
-    "attributes": { "data-action": "disable", "data-idx": "0" }
-  },
-  "mouse": {
-    "client_x": 1250, "client_y": 340,
-    "page_x": 1250, "page_y": 780,
-    "button": 0
-  },
-  "modifiers": {
-    "ctrl_key": false, "shift_key": false,
-    "alt_key": false, "meta_key": false
+  "user": { "fingerprint_id": "fp_..." },
+  "browser": { "...": "...", "screen": { "...": "..." } },
+  "data": {
+    "trackName": "click",
+    "timestamp": "2026-06-02T12:01:00.000Z",
+    "session_id": "sess_...",
+    "element": {
+      "tag": "BUTTON", "id": "sendBtn", "class_list": "",
+      "text": "", "selector": "div.input-area > button#sendBtn",
+      "attributes": { "data-action": "disable", "data-idx": "0" }
+    },
+    "mouse": { "client_x": 1250, "client_y": 340, "page_x": 1250, "page_y": 780, "button": 0 },
+    "modifiers": { "ctrl_key": false, "shift_key": false, "alt_key": false, "meta_key": false }
   }
 }
 ```
@@ -322,15 +359,19 @@ window.__tracker.getMode(); // "auto" 或 "manual"
 
 ```json
 {
-  "trackName": "scroll",
-  "browser": {},
-  "screen": { "viewport_height": 920 },
-  "scroll_depth_pct": 75,
-  "scroll_depth_px": 840,
-  "max_scroll_pct": 75,
-  "document_height": 1120,
-  "viewport_height": 920,
-  "milestone": 75
+  "user": { "fingerprint_id": "fp_..." },
+  "browser": { "page_url": "...", "screen": { "viewport_height": 920 } },
+  "data": {
+    "trackName": "scroll",
+    "timestamp": "...",
+    "session_id": "sess_...",
+    "scroll_depth_pct": 75,
+    "scroll_depth_px": 840,
+    "max_scroll_pct": 75,
+    "document_height": 1120,
+    "viewport_height": 920,
+    "milestone": 75
+  }
 }
 ```
 
@@ -338,11 +379,15 @@ window.__tracker.getMode(); // "auto" 或 "manual"
 
 ```json
 {
-  "trackName": "visibility",
-  "browser": {},
-  "screen": {},
-  "state": "hidden",
-  "duration_visible_ms": 253780
+  "user": { "fingerprint_id": "fp_..." },
+  "browser": { "page_url": "...", "screen": {} },
+  "data": {
+    "trackName": "visibility",
+    "timestamp": "...",
+    "session_id": "sess_...",
+    "state": "hidden",
+    "duration_visible_ms": 253780
+  }
 }
 ```
 
@@ -350,15 +395,19 @@ window.__tracker.getMode(); // "auto" 或 "manual"
 
 ```json
 {
-  "trackName": "error",
-  "browser": {},
-  "screen": {},
-  "error_type": "error | unhandledrejection | manual",
-  "message": "Uncaught TypeError: Cannot read properties of null",
-  "filename": "app.js",
-  "lineno": 142,
-  "colno": 17,
-  "stack": "TypeError: Cannot read properties of null\n    at loadRows (app.js:142:17)"
+  "user": { "fingerprint_id": "fp_..." },
+  "browser": { "page_url": "...", "screen": {} },
+  "data": {
+    "trackName": "error",
+    "timestamp": "...",
+    "session_id": "sess_...",
+    "error_type": "error | unhandledrejection | manual",
+    "message": "Uncaught TypeError: Cannot read properties of null",
+    "filename": "app.js",
+    "lineno": 142,
+    "colno": 17,
+    "stack": "TypeError: ..."
+  }
 }
 ```
 
@@ -366,9 +415,15 @@ window.__tracker.getMode(); // "auto" 或 "manual"
 
 ```json
 {
-  "trackName": "purchase",
-  "label": "buy_now",
-  "payload": { "product_id": 42, "amount": 99.9, "currency": "CNY" }
+  "user": { "fingerprint_id": "fp_..." },
+  "browser": { "...": "...", "screen": { "...": "..." } },
+  "data": {
+    "trackName": "purchase",
+    "timestamp": "...",
+    "session_id": "sess_...",
+    "label": "buy_now",
+    "payload": { "product_id": 42, "amount": 99.9, "currency": "CNY" }
+  }
 }
 ```
 

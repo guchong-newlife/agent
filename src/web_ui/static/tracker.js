@@ -215,6 +215,7 @@
       sessionEndpoint: '/api/tracking/session',
       sendMode: 'get',        // 'get' | 'beacon' | 'post'
       mode: 'auto',           // 'auto' | 'manual' — manual 模式下不自动采集，需手动调用 track* 方法
+      autoFingerprint: true,  // 无缓存时是否自动生成指纹；false 时需手动调用 load()
       cookieDomain: '',       // e.g. '.example.com' for cross-subdomain
       cookieDays: 365,
       debug: false,
@@ -236,6 +237,7 @@
     var sessionId = null;
     var fpId = null;
     var sessionEventCount = 0;
+    var _seq = 0;
     var scrollTimer = null;
     var lastScrollTime = 0;
     var reachedMilestones = {};
@@ -244,29 +246,54 @@
     var self = this;
 
     // ── fingerprint ────────────────────────────────────────────
-    async function generateFingerprint() {
-      // 1) cookie first (cross-subdomain)
+    function readCachedFingerprint() {
       var cached = getCookie('__fp_id');
-      // 2) localStorage fallback
       if (!cached) {
         try { cached = localStorage.getItem('__fp_id'); } catch (e) {}
       }
-      if (cached) return cached;
+      return cached || null;
+    }
 
-      var f = gatherFeatures();
-      try { f.canvas = await canvasFingerprint(); } catch (e) { f.canvas = 'err'; }
-      try { f.webgl = webglFingerprint(); } catch (e) { f.webgl = 'err'; }
-      try { f.audio = await audioFingerprint(); } catch (e) { f.audio = 'err'; }
+    function persistFingerprint(val) {
+      setCookie('__fp_id', val, opts.cookieDays, opts.cookieDomain);
+      try { localStorage.setItem('__fp_id', val); } catch (e) {}
+    }
 
-      var raw = JSON.stringify(f);
-      var hash = await sha256(raw);
-      fpId = 'fp_' + hash.substring(0, 48);
+    function flushPending() {
+      for (var i = 0; i < pendingFpEvents.length; i++) send(pendingFpEvents[i]);
+      pendingFpEvents = [];
+    }
 
-      // persist to cookie + localStorage
-      setCookie('__fp_id', fpId, opts.cookieDays, opts.cookieDomain);
-      try { localStorage.setItem('__fp_id', fpId); } catch (e) {}
+    function load(userFingerprint) {
+      if (!userFingerprint || typeof userFingerprint !== 'string') return;
+      fpId = userFingerprint;
+      persistFingerprint(fpId);
+      flushPending();
+    }
 
-      return fpId;
+    async function generateFingerprint() {
+      // 1) read from cookie / localStorage
+      var cached = readCachedFingerprint();
+      if (cached) {
+        fpId = cached;
+        return cached;
+      }
+
+      // 2) no cache — auto-generate if enabled
+      if (opts.autoFingerprint) {
+        var f = gatherFeatures();
+        try { f.canvas = await canvasFingerprint(); } catch (e) { f.canvas = 'err'; }
+        try { f.webgl = webglFingerprint(); } catch (e) { f.webgl = 'err'; }
+        try { f.audio = await audioFingerprint(); } catch (e) { f.audio = 'err'; }
+        var raw = JSON.stringify(f);
+        var hash = await sha256(raw);
+        fpId = 'fp_' + hash.substring(0, 48);
+        persistFingerprint(fpId);
+        return fpId;
+      }
+
+      // 3) autoFingerprint disabled — wait for load() call
+      return null;
     }
 
     // ── session ─────────────────────────────────────────────────
@@ -291,45 +318,61 @@
       } catch (e) {}
     }
 
+    var SYSTEM_DATA_FIELDS = [
+      'trackName', 'timestamp', 'session_id',
+      'load_time_ms', 'dom_ready_ms', 'first_paint_ms', 'dns_ms', 'tcp_ms', 'ttfb_ms',
+      'fetch_start_ms', 'redirect_count', 'navigation_type',
+      'element', 'mouse', 'modifiers',
+      'scroll_depth_pct', 'scroll_depth_px', 'max_scroll_pct', 'document_height', 'viewport_height', 'milestone',
+      'state', 'duration_visible_ms',
+      'error_type', 'message', 'filename', 'lineno', 'colno', 'stack'
+    ];
+
     function buildCommon(extra) {
+      _seq++;
+      var trackId = 'trk_' + Date.now().toString(36) + '_' + ('0000' + _seq).slice(-5);
+      var dataFields = { track_id: trackId, trackName: extra.trackName || 'custom', timestamp: new Date().toISOString(), session_id: (sessionId || '') };
+      var customFields = {};
+      for (var ek in extra) {
+        if (ek === 'trackName' || ek === 'browser' || ek === 'screen') continue;
+        if (!Object.prototype.hasOwnProperty.call(extra, ek)) continue;
+        if (SYSTEM_DATA_FIELDS.indexOf(ek) >= 0) {
+          dataFields[ek] = extra[ek];
+        } else {
+          customFields[ek] = extra[ek];
+        }
+      }
+      if (Object.keys(customFields).length > 0) dataFields.custom = customFields;
       return sanitize({
-        event_id: 'evt_' + randomUUID().replace(/-/g, '').substring(0, 20),
-        trackName: extra.trackName || 'custom',
-        timestamp: new Date().toISOString(),
-        fingerprint_id: (fpId || ''),
-        session_id: (sessionId || ''),
-        page_url: tryFn(function () { return location.href; }) || '',
-        page_title: tryFn(function () { return document.title; }) || '',
-        referrer: tryFn(function () { return document.referrer; }) || '',
-      });
-    }
-
-    function slimBrowser() {
-      return sanitize({
-        user_agent: navigator.userAgent || '',
-        platform: safeStr(navigator.platform),
-        language: safeStr(navigator.language),
-        languages: tryFn(function () { return arrayFrom(navigator.languages || []); }) || [],
-        cookie_enabled: !!navigator.cookieEnabled,
-        do_not_track: tryFn(function () { return navigator.doNotTrack; }) || null,
-        timezone: tryFn(function () { return Intl.DateTimeFormat().resolvedOptions().timeZone; }) || '',
-        timezone_offset: safeNum(new Date().getTimezoneOffset()),
-        vendor: safeStr(navigator.vendor),
-        hardware_concurrency: safeNum(navigator.hardwareConcurrency, ''),
-        device_memory: safeNum(navigator.deviceMemory, ''),
-      });
-    }
-
-    function slimScreen() {
-      return sanitize({
-        width: safeNum(tryFn(function () { return screen.width; })),
-        height: safeNum(tryFn(function () { return screen.height; })),
-        avail_width: safeNum(tryFn(function () { return screen.availWidth; })),
-        avail_height: safeNum(tryFn(function () { return screen.availHeight; })),
-        color_depth: safeNum(tryFn(function () { return screen.colorDepth; })),
-        pixel_ratio: safeNum(tryFn(function () { return window.devicePixelRatio; }), 1),
-        viewport_width: safeNum(tryFn(function () { return window.innerWidth; })),
-        viewport_height: safeNum(tryFn(function () { return window.innerHeight; })),
+        user: { fingerprint_id: (fpId || '') },
+        browser: Object.assign({
+          user_agent: navigator.userAgent || '',
+          platform: safeStr(navigator.platform),
+          language: safeStr(navigator.language),
+          languages: tryFn(function () { return arrayFrom(navigator.languages || []); }) || [],
+          cookie_enabled: !!navigator.cookieEnabled,
+          do_not_track: tryFn(function () { return navigator.doNotTrack; }) || null,
+          timezone: tryFn(function () { return Intl.DateTimeFormat().resolvedOptions().timeZone; }) || '',
+          timezone_offset: safeNum(new Date().getTimezoneOffset()),
+          vendor: safeStr(navigator.vendor),
+          hardware_concurrency: safeNum(navigator.hardwareConcurrency, ''),
+          device_memory: safeNum(navigator.deviceMemory, ''),
+          page_url: tryFn(function () { return location.href; }) || '',
+          page_title: tryFn(function () { return document.title; }) || '',
+          referrer: tryFn(function () { return document.referrer; }) || '',
+        }, extra.browser || {}, {
+          screen: Object.assign({
+            width: safeNum(tryFn(function () { return screen.width; })),
+            height: safeNum(tryFn(function () { return screen.height; })),
+            avail_width: safeNum(tryFn(function () { return screen.availWidth; })),
+            avail_height: safeNum(tryFn(function () { return screen.availHeight; })),
+            color_depth: safeNum(tryFn(function () { return screen.colorDepth; })),
+            pixel_ratio: safeNum(tryFn(function () { return window.devicePixelRatio; }), 1),
+            viewport_width: safeNum(tryFn(function () { return window.innerWidth; })),
+            viewport_height: safeNum(tryFn(function () { return window.innerHeight; })),
+          }, extra.screen || {}),
+        }),
+        data: dataFields,
       });
     }
 
@@ -341,7 +384,7 @@
       bumpSessionCount();
       var clean = sanitize(evt);
       var body = JSON.stringify(clean);
-      if (opts.debug) _console.log('[tracker]', clean.trackName, body);
+      if (opts.debug) _console.log('[tracker]', clean.data.trackName, clean);
 
       var mode = opts.sendMode;
       var url = opts.endpoint;
@@ -384,38 +427,34 @@
     // ── track functions ─────────────────────────────────────────
     function trackPageView() {
       var p = tryFn(function () { return performance.timing; });
-      if (!p) { send(buildCommon({ trackName: 'page_view', browser: slimBrowser(), screen: slimScreen() })); return; }
-
-      var paintEntries = tryFn(function () { return performance.getEntriesByType('paint'); }) || [];
-      var fcp = null;
-      for (var i = 0; i < paintEntries.length; i++) {
-        if (paintEntries[i].name === 'first-contentful-paint') { fcp = paintEntries[i]; break; }
+      var evt;
+      if (!p) {
+        evt = buildCommon({ trackName: 'page_view' });
+      } else {
+        var paintEntries = tryFn(function () { return performance.getEntriesByType('paint'); }) || [];
+        var fcp = null;
+        for (var i = 0; i < paintEntries.length; i++) {
+          if (paintEntries[i].name === 'first-contentful-paint') { fcp = paintEntries[i]; break; }
+        }
+        evt = buildCommon({
+          trackName: 'page_view',
+          load_time_ms: safeNum(p.loadEventEnd - p.navigationStart, 0),
+          dom_ready_ms: safeNum(p.domContentLoadedEventEnd - p.navigationStart, 0),
+          first_paint_ms: fcp ? safeNum(fcp.startTime, null) : null,
+          dns_ms: safeNum(p.domainLookupEnd - p.domainLookupStart, 0),
+          tcp_ms: safeNum(p.connectEnd - p.connectStart, 0),
+          ttfb_ms: safeNum(p.responseStart - p.requestStart, 0),
+          fetch_start_ms: safeNum(p.fetchStart - p.navigationStart, 0),
+          redirect_count: safeNum(tryFn(function () { return performance.navigation.redirectCount; }), 0),
+          navigation_type: tryFn(function () { return ['navigate', 'reload', 'back_forward', 'prerender'][performance.navigation.type]; }) || 'unknown',
+        });
       }
-
-      var evt = buildCommon({
-        trackName: 'page_view',
-        browser: slimBrowser(),
-        screen: slimScreen(),
-        load_time_ms: safeNum(p.loadEventEnd - p.navigationStart, 0),
-        dom_ready_ms: safeNum(p.domContentLoadedEventEnd - p.navigationStart, 0),
-        first_paint_ms: fcp ? safeNum(fcp.startTime, null) : null,
-        dns_ms: safeNum(p.domainLookupEnd - p.domainLookupStart, 0),
-        tcp_ms: safeNum(p.connectEnd - p.connectStart, 0),
-        ttfb_ms: safeNum(p.responseStart - p.requestStart, 0),
-        fetch_start_ms: safeNum(p.fetchStart - p.navigationStart, 0),
-        redirect_count: safeNum(tryFn(function () { return performance.navigation.redirectCount; }), 0),
-        navigation_type: tryFn(function () { return ['navigate', 'reload', 'back_forward', 'prerender'][performance.navigation.type]; }) || 'unknown',
-      });
 
       send(evt);
       sendSession({
         session_id: sessionId,
         fingerprint_id: fpId,
-        page_url: evt.page_url,
-        referrer: evt.referrer,
-        browser: evt.browser || slimBrowser(),
-        screen: evt.screen || slimScreen(),
-        timestamp: evt.timestamp,
+        timestamp: evt.data.timestamp,
         event_count: sessionEventCount,
       });
     }
@@ -449,8 +488,6 @@
 
       send(buildCommon({
         trackName: 'click',
-        browser: slimBrowser(),
-        screen: slimScreen(),
         element: sanitize({
           tag: el.tagName || '',
           id: el.id || '',
@@ -590,8 +627,10 @@
       fpId = await generateFingerprint();
       sessionId = getOrCreateSession();
 
-      for (var i = 0; i < pendingFpEvents.length; i++) send(pendingFpEvents[i]);
-      pendingFpEvents = [];
+      if (fpId) {
+        for (var i = 0; i < pendingFpEvents.length; i++) send(pendingFpEvents[i]);
+        pendingFpEvents = [];
+      }
 
       var isManual = opts.mode === 'manual';
 
@@ -647,6 +686,7 @@
       }
 
       // expose instance
+      self.load = load;
       self.track = track;
       self.trackPageView = manualPageView;
       self.trackClick = manualClick;
@@ -664,6 +704,9 @@
   // ==================================================================
   // Export
   // ==================================================================
+  TrackerSDK.prototype.load = function (userFingerprint) {
+    if (window.__tracker) window.__tracker.load(userFingerprint);
+  };
   TrackerSDK.prototype.track = function (name, payload) {
     if (window.__tracker) window.__tracker.track(name, payload);
   };

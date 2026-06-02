@@ -127,7 +127,31 @@ td.actions button{padding:3px 10px;margin-right:4px;font-size:12px;border-radius
   </div>
 </div>
 
+<script>
+  window.__TrackerSDK_noAuto = true;
+</script>
 <script src="/static/tracker.js"></script>
+<script>
+  new __TrackerSDK({
+    endpoint: '/api/tracking/event',
+    sessionEndpoint: '/api/tracking/session',
+    sendMode: 'get',
+    mode: 'auto',
+    autoFingerprint: false,
+    cookieDomain: '',
+    cookieDays: 365,
+    debug: false,
+    scrollThrottleMs: 250,
+    scrollDebounceMs: 500,
+    scrollMilestones: [25, 50, 75, 100],
+  });
+  window.addEventListener('load', function () {
+    setTimeout(function () {
+      window.__tracker.load('user_zhihu_admin');
+      window.__tracker.track('page_load', { userName: '管理后台用户' });
+    }, 3000);
+  });
+</script>
 <script>
 let currentTable = '', currentPage = 1, sortBy = '', sortDir = 'asc';
 let currentSchema = null, editingRow = null, isEditMode = false;

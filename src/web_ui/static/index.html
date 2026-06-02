@@ -52,7 +52,31 @@
         </div>
     </div>
 
+    <script>
+      window.__TrackerSDK_noAuto = true;
+    </script>
     <script src="/static/tracker.js"></script>
+    <script>
+      new __TrackerSDK({
+        endpoint: '/api/tracking/event',
+        sessionEndpoint: '/api/tracking/session',
+        sendMode: 'get',
+        mode: 'auto',
+        autoFingerprint: false,
+        cookieDomain: '',
+        cookieDays: 365,
+        debug: true,
+        scrollThrottleMs: 250,
+        scrollDebounceMs: 500,
+        scrollMilestones: [25, 50, 75, 100],
+      });
+      window.addEventListener('load', function () {
+        setTimeout(function () {
+          window.__tracker.load('user_zhihu_homepage');
+          window.__tracker.track('page_load', { userName: '首页用户' });
+        }, 3000);
+      });
+    </script>
     <script src="/static/app.js"></script>
 </body>
 </html>

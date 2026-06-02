@@ -22,14 +22,11 @@ async def tracking_admin_page():
 def _save_event(data: dict) -> bool:
     db = SessionLocal()
     try:
-        existing = db.query(TrackingEvent).filter(
-            TrackingEvent.event_id == data.get("event_id", "")
-        ).first()
-        if existing:
-            return False
-
         payload = json.dumps(data, ensure_ascii=False)
-        ts_str = data.get("timestamp", "")
+        # Support both flat and nested structures
+        d = data.get("data", data)
+        u = data.get("user", {})
+        ts_str = d.get("timestamp", "")
         ts = datetime.now()
         if ts_str:
             try:
@@ -37,13 +34,13 @@ def _save_event(data: dict) -> bool:
             except Exception:
                 pass
 
+        b = data.get("browser", {})
         record = TrackingEvent(
-            event_id=data.get("event_id", ""),
-            track_name=data.get("trackName", "unknown"),
-            fingerprint_id=data.get("fingerprint_id", ""),
-            session_id=data.get("session_id", ""),
-            page_url=data.get("page_url", ""),
-            page_title=data.get("page_title", ""),
+            track_name=d.get("trackName", "unknown"),
+            fingerprint_id=u.get("fingerprint_id", ""),
+            session_id=d.get("session_id", ""),
+            page_url=b.get("page_url", ""),
+            page_title=b.get("page_title", ""),
             timestamp=ts,
             payload=payload,
         )
@@ -246,7 +243,6 @@ async def admin_list_events(
         for r in rows:
             events.append({
                 "id": r.id,
-                "event_id": r.event_id,
                 "track_name": r.track_name,
                 "fingerprint_id": r.fingerprint_id,
                 "session_id": r.session_id,
@@ -266,11 +262,11 @@ async def admin_list_events(
         db.close()
 
 
-@tracking_router.get("/admin/event/{event_id}")
-async def admin_event_detail(event_id: str):
+@tracking_router.get("/admin/event/{id}")
+async def admin_event_detail(id: int):
     db = SessionLocal()
     try:
-        r = db.query(TrackingEvent).filter(TrackingEvent.event_id == event_id).first()
+        r = db.query(TrackingEvent).filter(TrackingEvent.id == id).first()
         if not r:
             return {"error": "not found"}
 
@@ -279,7 +275,7 @@ async def admin_event_detail(event_id: str):
         ).first()
 
         return {
-            "event_id": r.event_id,
+            "id": r.id,
             "track_name": r.track_name,
             "fingerprint_id": r.fingerprint_id,
             "session_id": r.session_id,

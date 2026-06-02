@@ -6,7 +6,6 @@ class TrackingEvent(Base):
     __tablename__ = "tracking_events"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    event_id = Column(String(64), unique=True, nullable=False, index=True)
     track_name = Column(String(32), nullable=False, index=True)
     fingerprint_id = Column(String(128), nullable=False, index=True)
     session_id = Column(String(64), nullable=False, index=True)

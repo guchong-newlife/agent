@@ -130,7 +130,7 @@ async function reload() {
         var s = String(v);
         if (c === 'track_name') return '<td><span class="badge badge-' + s + '">' + s + '</span></td>';
         return '<td title="' + s.replace(/"/g,'&quot;') + '">' + (s.length > 60 ? s.slice(0,60)+'...' : s) + '</td>';
-      }).join('') + '<td><button class="btn" style="padding:3px 8px;font-size:11px" onclick="showDetail(\'' + e.event_id + '\')">查看</button></td></tr>';
+      }).join('') + '<td><button class="btn" style="padding:3px 8px;font-size:11px" onclick="showDetail(' + e.id + ')">查看</button></td></tr>';
     }).join('');
 
     renderPagination(d);
@@ -155,13 +155,13 @@ function renderPagination(d) {
 
 function goPage(p) { page = p; reload(); }
 
-async function showDetail(eventId) {
-  var r = await fetch('/api/tracking/admin/event/' + eventId);
+async function showDetail(id) {
+  var r = await fetch('/api/tracking/admin/event/' + id);
   var d = await r.json();
   if (d.error) return;
-  document.getElementById('modal-title').textContent = d.track_name + ' - ' + eventId;
+  document.getElementById('modal-title').textContent = d.track_name + ' - #' + d.id;
   var html = '<div class="info-grid">';
-  ['event_id','track_name','fingerprint_id','session_id','page_url','page_title','timestamp'].forEach(function(k){
+  ['id','track_name','fingerprint_id','session_id','page_url','page_title','timestamp'].forEach(function(k){
     html += '<div class="info-item"><div class="label">' + k + '</div>' + (d[k]||'') + '</div>';
   });
   html += '</div>';
